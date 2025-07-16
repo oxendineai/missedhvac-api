@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     // Step 3: Create context from search results
     const context = searchResults
-      ?.map((doc: any) => doc.content)
+      ?.map((doc: { content: string }) => doc.content)
       .join('\n\n') || 'No relevant information found.';
 
     // Step 4: Generate AI response with HVAC expertise
