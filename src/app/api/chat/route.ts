@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     // Step 4: Generate AI response with HVAC expertise
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
@@ -61,8 +61,8 @@ If the question isn't about HVAC, politely redirect to HVAC topics. For emergenc
           content: userMessage
         }
       ],
-      max_tokens: 500,
-      temperature: 0.7,
+      max_tokens: 200,
+      temperature: 0.4,
     });
 
     const response = completion.choices[0].message.content;
