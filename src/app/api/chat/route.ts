@@ -302,7 +302,7 @@
 
     // JavaScript functionality
     let isOpen = false;
-    let conversationHistory = [];
+    const conversationHistory = [];
 
     function scrollToBottom() {
         const messagesContainer = document.getElementById('chat-messages');
@@ -387,7 +387,7 @@
             addMessage(data.content || data.response);
             conversationHistory.push({ role: 'assistant', content: data.content || data.response });
             
-        } catch (error) {
+        } catch (_error) {
             hideTypingIndicator();
             addMessage(`I apologize, but I'm having trouble connecting right now. For immediate HVAC assistance, please call ${config.emergencyPhone}.`);
         }
