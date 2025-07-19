@@ -62,7 +62,7 @@ If the question isn't about HVAC, politely redirect to HVAC topics. For emergenc
           content: userMessage
         }
       ],
-      max_tokens: 200,
+      max_tokens: 300,
       temperature: 0.4,
     });
 
