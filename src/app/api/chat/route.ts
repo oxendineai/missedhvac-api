@@ -23,7 +23,65 @@ export async function POST(req: NextRequest) {
         },
       },
     },
-    // Add other tools here as before (check_inventory, log_to_crm, send_sms, send_link)
+    {
+      type: "function",
+      function: {
+        name: "check_inventory",
+        description: "Check HVAC inventory",
+        parameters: {
+          type: "object",
+          properties: {
+            item: { type: "string", description: "Item to check" },
+          },
+          required: ["item"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "log_to_crm",
+        description: "Log lead to HubSpot",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            email: { type: "string" },
+            query: { type: "string" },
+          },
+          required: ["name", "query"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "send_sms",
+        description: "Send SMS alert",
+        parameters: {
+          type: "object",
+          properties: {
+            phone: { type: "string" },
+            message: { type: "string" },
+          },
+          required: ["phone", "message"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "send_link",
+        description: "Send a link in response",
+        parameters: {
+          type: "object",
+          properties: {
+            url: { type: "string" },
+          },
+          required: ["url"],
+        },
+      },
+    },
   ];
 
   // Initial AI call with tools
@@ -47,14 +105,25 @@ export async function POST(req: NextRequest) {
     finalResponse = "Processing your request...";
     for (const toolCall of toolCalls) {
       const functionName = toolCall.function.name;
-      const args = JSON.parse(toolCall.function.arguments) as Record<string, string>;
+      const args = JSON.parse(toolCall.function.arguments) as any; // Use any to fix typing
       let toolResult;
 
       switch (functionName) {
         case 'book_appointment':
           toolResult = await bookAppointment(args.time, args.details);
           break;
-        // Add cases for other tools
+        case 'check_inventory':
+          toolResult = await checkInventory(args.item);
+          break;
+        case 'log_to_crm':
+          toolResult = await logToCrm(args.name, args.email, args.query);
+          break;
+        case 'send_sms':
+          toolResult = await sendSms(args.phone, args.message);
+          break;
+        case 'send_link':
+          toolResult = `Link: ${args.url}`;
+          break;
         default:
           toolResult = "Unknown action";
       }
@@ -62,11 +131,29 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ response: finalResponse });
+  // Add CORS headers
+  return NextResponse.json({ response: finalResponse }, {
+    headers: {
+      'Access-Control-Allow-Origin': '*', // Or specify missedhvac.com for security
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
 }
 
 // Mock tool functions (as before)
 async function bookAppointment(time: string, details: string) {
   return `Appointment booked for ${time}. Details: ${details}`;
 }
-// Add other mocks...
+
+async function checkInventory(item: string) {
+  return `5 units of ${item} in stock.`;
+}
+
+async function logToCrm(name: string, email: string, query: string) {
+  return `Lead logged: ${name} (${email}) - Query: ${query}`;
+}
+
+async function sendSms(phone: string, message: string) {
+  return `SMS sent to ${phone}: ${message}`;
+}
