@@ -1,111 +1,156 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { createClient } from '@supabase/supabase-js';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); // Add your key to .env.local
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
-);
-
-// CORS headers - Allow your widget to call from any domain
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
-// Export the POST handler
 export async function POST(req: NextRequest) {
-  try {
-    const { messages, customerId } = await req.json();
-    const userMessage = messages[messages.length - 1].content;
+  const { message, context, userId } = await req.json(); // Add userId for multi-tenant
 
-    console.log(`Customer ${customerId} asked: ${userMessage}`);
-
-    // Step 1: Convert user message to embedding
-    const embedding = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: userMessage,
-    });
-
-    // Step 2: Search your knowledge base
-    const { data: searchResults } = await supabase.rpc('match_documents', {
-      query_embedding: embedding.data[0].embedding,
-      match_threshold: 0.7,
-      match_count: 5
-    });
-
-    // Step 3: Create context from search results
-    const context = searchResults
-      ?.map((doc: { content: string }) => doc.content)
-      .join('\n\n') || 'No relevant information found.';
-
-    // Step 4: Generate AI response with HVAC expertise
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert HVAC assistant for MissedHVAC. Use the context below to answer questions about heating, cooling, and HVAC systems. Be helpful, professional, and specific.
-
-Context from knowledge base:
-${context}
-
-If the question isn't about HVAC, politely redirect to HVAC topics. For emergencies, mention calling (555) 987-6543.`
+  // Define tools for agentic features
+  const tools = [
+    {
+      type: "function",
+      function: {
+        name: "book_appointment",
+        description: "Book a calendar appointment",
+        parameters: {
+          type: "object",
+          properties: {
+            time: { type: "string", description: "Time in ISO format" },
+            details: { type: "string", description: "Appointment details" },
+          },
+          required: ["time", "details"],
         },
-        {
-          role: "user",
-          content: userMessage
-        }
-      ],
-      max_tokens: 300,
-      temperature: 0.4,
-    });
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "check_inventory",
+        description: "Check HVAC inventory",
+        parameters: {
+          type: "object",
+          properties: {
+            item: { type: "string", description: "Item to check" },
+          },
+          required: ["item"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "log_to_crm",
+        description: "Log lead to HubSpot",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            email: { type: "string" },
+            query: { type: "string" },
+          },
+          required: ["name", "query"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "send_sms",
+        description: "Send SMS alert",
+        parameters: {
+          type: "object",
+          properties: {
+            phone: { type: "string" },
+            message: { type: "string" },
+          },
+          required: ["phone", "message"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "send_link",
+        description: "Send a link in response",
+        parameters: {
+          type: "object",
+          properties: {
+            url: { type: "string" },
+          },
+          required: ["url"],
+        },
+      },
+    },
+  ];
 
-    const response = completion.choices[0].message.content;
+  // Initial AI call with tools
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: `You are an HVAC AI assistant for MissedHVAC. Use the context below to answer. Use tools for actions like booking or inventory. For emergencies, send SMS. Context: ${context}` },
+      { role: "user", content: message },
+    ],
+    tools,
+    tool_choice: "auto", // AI decides when to use tools
+    temperature: 0.4,
+    max_tokens: 300,
+  });
 
-    // Step 5: Log the interaction (optional)
-    await supabase.from('chat_logs').insert({
-      customer_id: customerId,
-      user_message: userMessage,
-      ai_response: response,
-      created_at: new Date().toISOString()
-    });
+  let finalResponse = response.choices[0].message.content;
+  let toolCalls = response.choices[0].message.tool_calls;
 
-    return NextResponse.json({
-      role: 'assistant',
-      content: response
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...corsHeaders
+  // Handle tool calls if present
+  if (toolCalls) {
+    finalResponse = "Processing your request...";
+    for (const toolCall of toolCalls) {
+      const functionName = toolCall.function.name;
+      const args = JSON.parse(toolCall.function.arguments);
+      let toolResult;
+
+      switch (functionName) {
+        case 'book_appointment':
+          toolResult = await bookAppointment(args.time, args.details); // Implement real function
+          break;
+        case 'check_inventory':
+          toolResult = await checkInventory(args.item);
+          break;
+        case 'log_to_crm':
+          toolResult = await logToCrm(args.name, args.email, args.query);
+          break;
+        case 'send_sms':
+          toolResult = await sendSms(args.phone, args.message);
+          break;
+        case 'send_link':
+          toolResult = `Link: ${args.url}`;
+          break;
+        default:
+          toolResult = "Unknown action";
       }
-    });
-
-  } catch (error) {
-    console.error('Chat API error:', error);
-    
-    return NextResponse.json({
-      role: 'assistant',
-      content: 'I apologize, but I\'m having trouble connecting right now. For immediate HVAC assistance, please call (555) 987-6543.'
-    }, {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        ...corsHeaders
-      }
-    });
+      finalResponse += `\nAction result: ${toolResult}`;
+    }
   }
+
+  return NextResponse.json({ response: finalResponse });
 }
 
-// Export the OPTIONS handler for CORS
-export async function OPTIONS(request: NextRequest) {
-  return new Response(null, {
-    status: 200,
-    headers: corsHeaders
-  });
+// Mock tool functions (replace with real APIs, e.g., n8n webhooks)
+async function bookAppointment(time: string, details: string) {
+  // POST to n8n webhook for Google Calendar
+  return `Appointment booked for ${time}. Details: ${details}`;
+}
+
+async function checkInventory(item: string) {
+  // POST to n8n for Airtable query
+  return `5 units of ${item} in stock.`;
+}
+
+async function logToCrm(name: string, email: string, query: string) {
+  // POST to n8n for HubSpot
+  return `Lead logged: ${name} (${email}) - Query: ${query}`;
+}
+
+async function sendSms(phone: string, message: string) {
+  // POST to n8n for Twilio
+  return `SMS sent to ${phone}: ${message}`;
 }
