@@ -4,7 +4,7 @@ import OpenAI from 'openai';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); // Add your key to .env.local
 
 export async function POST(req: NextRequest) {
-  const { message, context, userId } = await req.json(); // Add userId for multi-tenant
+  const { message, context } = await req.json(); // Removed unused userId
 
   // Define tools for agentic features
   const tools = [
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
   });
 
   let finalResponse = response.choices[0].message.content;
-  let toolCalls = response.choices[0].message.tool_calls;
+  const toolCalls = response.choices[0].message.tool_calls;
 
   // Handle tool calls if present
   if (toolCalls) {
@@ -141,7 +141,7 @@ async function bookAppointment(time: string, details: string) {
 }
 
 async function checkInventory(item: string) {
-  // POST to n8n for Airtable query
+  // POST to n8n for Airtable
   return `5 units of ${item} in stock.`;
 }
 
