@@ -6,6 +6,18 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 export async function POST(req: NextRequest) {
   const { message, context } = await req.json();
 
+  // Add authentication check for incoming requests
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const token = authHeader.split(' ')[1];
+  // For now, check against a test key; replace with real validation (e.g., from DB/HubSpot) later
+  if (token !== 'sk-test-missedhvac-20250726') { // YOUR TEST KEY HERE
+    return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
+  }
+  // Authentication passed - proceed with OpenAI call
+
   // Define tools for agentic features
   const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     {
@@ -136,12 +148,12 @@ export async function POST(req: NextRequest) {
     headers: {
       'Access-Control-Allow-Origin': '*', // Or specify missedhvac.com for security
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization', // Added Authorization for the header
     },
   });
 }
 
-// Mock tool functions (as before)
+// Mock tool functions (as before - replace with real implementations later if needed)
 async function bookAppointment(time: string, details: string) {
   return `Appointment booked for ${time}. Details: ${details}`;
 }
